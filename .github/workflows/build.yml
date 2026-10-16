@@ -1,0 +1,68 @@
+name: Build Modded Telegram-iOS IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_repo:
+        description: 'Upstream Telegram Git Repository'
+        required: true
+        default: 'https://github.com/TelegramMessenger/Telegram-iOS.git'
+      upstream_branch:
+        description: 'Upstream Git Branch'
+        required: true
+        default: 'master'
+
+jobs:
+  build:
+    name: Build Telegram iOS IPA
+    runs-on: macos-14
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Mod Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Select Xcode Version
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.app || sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Clone Upstream Repository
+        run: |
+          echo "Cloning ${{ github.event.inputs.upstream_repo }} (branch: ${{ github.event.inputs.upstream_branch }})..."
+          git clone --branch ${{ github.event.inputs.upstream_branch }} --depth 1 ${{ github.event.inputs.upstream_repo }} telegram
+          cd telegram
+          git submodule update --init --recursive --depth 1 -j8
+
+      - name: Apply Mod Patches
+        run: |
+          python3 patcher.py --repo-path telegram
+
+      - name: Prepare Build Configuration
+        run: |
+          cp build_configuration.json telegram/build_configuration.json
+
+      - name: Build IPA with Bazel
+        run: |
+          cd telegram
+          python3 build-system/Make/Make.py \
+            --overrideXcodeVersion \
+            --overrideBazelVersion \
+            build \
+            --configuration=release_arm64 \
+            --buildNumber=10001 \
+            --configurationPath=build_configuration.json \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --outputBuildArtifactsPath=artifacts
+
+      - name: Upload Modded IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: TelegramMod-unsigned-ipa
+          path: telegram/artifacts/Telegram.ipa
+          if-no-files-found: error
