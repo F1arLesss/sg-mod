@@ -545,7 +545,46 @@ private func _internal_enqueueMessagesDirect(account: Account, peerId: PeerId, m
         }"""
     patch_file(gifts_file, p8_search, p8_replace, "Feature 8: Local NFT Gifts injection in ProfileGiftsContext")
 
-    print("[SUCCESS] All 21 patch operations applied cleanly.")
+    # 22. Patch Telegram/BUILD: App Icons compatibility (bypass Xcode 26 Icon Composer requirement)
+    tg_build_file = os.path.join(repo_path, "Telegram", "BUILD")
+    if os.path.isfile(tg_build_file):
+        p22_search_folders = 'composer_icon_folders = ["Telegram"]'
+        p22_replace_folders = 'composer_icon_folders = []'
+        patch_file(tg_build_file, p22_search_folders, p22_replace_folders, "Compatibility: Empty composer_icon_folders")
+
+        p22_search_app_icons = """    app_icons = [ ":{}_icon".format(name) for name in composer_icon_folders ],
+    alternate_icons = [
+        ":{}".format(name) for name in alternate_icon_folders
+    ],
+    resources = [
+        ":LaunchScreen",
+        #":DefaultAppIcon",
+    ],"""
+        p22_replace_app_icons = """    alternate_icons = [
+        ":{}".format(name) for name in alternate_icon_folders
+    ],
+    resources = [
+        ":LaunchScreen",
+        ":DefaultAppIcon",
+    ],"""
+        patch_file(tg_build_file, p22_search_app_icons, p22_replace_app_icons, "Compatibility: Restore DefaultAppIcon and bypass Xcode 26 Icon Composer requirement")
+
+    # 23. Patch versions.json: align xcode version
+    versions_file = os.path.join(repo_path, "versions.json")
+    if os.path.isfile(versions_file):
+        try:
+            import json
+            with open(versions_file, "r", encoding="utf-8") as f:
+                v_data = json.load(f)
+            v_data["xcode"] = "16.2"
+            v_data["deploy_xcode"] = "16.2"
+            with open(versions_file, "w", encoding="utf-8") as f:
+                json.dump(v_data, f, indent=4)
+            print("[+] Successfully updated versions.json to Xcode 16.2")
+        except Exception as e:
+            print(f"[!] Warning updating versions.json: {e}")
+
+    print("[SUCCESS] All patch operations applied cleanly.")
 
 
 if __name__ == "__main__":
