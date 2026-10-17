@@ -584,6 +584,55 @@ private func _internal_enqueueMessagesDirect(account: Account, peerId: PeerId, m
         except Exception as e:
             print(f"[!] Warning updating versions.json: {e}")
 
+    # 24. Patch WebProxyTransport for Xcode 16 / iOS 18.2 SDK compatibility
+    carrier_file = os.path.join(repo_path, "submodules", "WebProxyTransport", "Sources", "WebProxyWebViewCarrier.swift")
+    if os.path.isfile(carrier_file):
+        patch_file(carrier_file, "import WebKit", "@preconcurrency import WebKit", "Compatibility: @preconcurrency import WebKit in WebProxyWebViewCarrier.swift")
+
+        p24_search_panel = """    @available(macOS 10.12, iOS 18.4, *)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        completionHandler(nil)
+    }"""
+        p24_replace_panel = """    /*
+    @available(macOS 10.12, iOS 18.4, *)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        completionHandler(nil)
+    }
+    */"""
+        patch_file(carrier_file, p24_search_panel, p24_replace_panel, "Compatibility: Comment out WKOpenPanelParameters for iOS SDK 18.2 compatibility")
+
+    attachment_file = os.path.join(repo_path, "submodules", "WebProxyTransport", "Sources", "WebProxyViewAttachment.swift")
+    if os.path.isfile(attachment_file):
+        patch_file(attachment_file, "import WebKit", "@preconcurrency import WebKit", "Compatibility: @preconcurrency import WebKit in WebProxyViewAttachment.swift")
+
+    hardening_file = os.path.join(repo_path, "submodules", "WebProxyTransport", "Sources", "WebProxyWebViewHardening.swift")
+    if os.path.isfile(hardening_file):
+        patch_file(hardening_file, "import WebKit", "@preconcurrency import WebKit", "Compatibility: @preconcurrency import WebKit in WebProxyWebViewHardening.swift")
+
+    # 25. Patch submodules/WebProxyTransport/BUILD: remove -warnings-as-errors
+    wpt_build_file = os.path.join(repo_path, "submodules", "WebProxyTransport", "BUILD")
+    if os.path.isfile(wpt_build_file):
+        patch_file(wpt_build_file, '"-warnings-as-errors",', '# "-warnings-as-errors",', "Compatibility: disable -warnings-as-errors in WebProxyTransport")
+
+    # 26. Patch Make.py: disable dsyms, watchos_cpus, and Rust lto=fat to speed up build by 2-3x
+    make_file = os.path.join(repo_path, "build-system", "Make", "Make.py")
+    if os.path.isfile(make_file):
+        patch_file(make_file, "'--@rules_rust//rust/settings:lto=fat',", "'--@rules_rust//rust/settings:lto=off',", "Optimization: disable Rust fat LTO in Make.py")
+
+        p26_search_config = """                # Always build universal Watch binaries.
+                '--watchos_cpus=arm64_32',
+
+                # Generate DSYM files when building.
+                '--apple_generate_dsym',
+
+                # Require DSYM files as build output.
+                '--output_groups=+dsyms',"""
+        p26_replace_config = """                # Disabled for faster CI builds:
+                # '--watchos_cpus=arm64_32',
+                # '--apple_generate_dsym',
+                # '--output_groups=+dsyms',"""
+        patch_file(make_file, p26_search_config, p26_replace_config, "Optimization: disable watchos_cpus and dsyms in Make.py")
+
     print("[SUCCESS] All patch operations applied cleanly.")
 
 

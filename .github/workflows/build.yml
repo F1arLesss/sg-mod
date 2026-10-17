@@ -17,29 +17,75 @@ on:
 jobs:
   build:
     name: Build Telegram iOS IPA
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 180
 
     steps:
       - name: Checkout Mod Repository
         uses: actions/checkout@v4
 
+      - name: Free Disk Space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h
+          
+          # Remove Android SDKs and toolchains
+          sudo rm -rf "$ANDROID_HOME" "$ANDROID_SDK_ROOT" ~/Library/Android /usr/local/share/android-sdk /Library/Android 2>/dev/null || true
+          
+          # Remove .NET and Mono runtimes
+          sudo rm -rf /usr/share/dotnet /usr/local/share/dotnet /Library/Frameworks/Mono.framework 2>/dev/null || true
+          
+          # Keep only latest Xcode, remove older versions to save 20+ GB
+          LATEST_XCODE=$(find /Applications -maxdepth 1 -name "Xcode_*.app" | sort -V | tail -n 1)
+          echo "Keeping latest Xcode: $LATEST_XCODE"
+          for xcode_app in /Applications/Xcode_*.app; do
+            if [ -d "$xcode_app" ] && [ "$xcode_app" != "$LATEST_XCODE" ]; then
+              echo "Removing older Xcode: $xcode_app"
+              sudo rm -rf "$xcode_app" 2>/dev/null || true
+            fi
+          done
+          
+          # Clean caches
+          brew cleanup 2>/dev/null || true
+          sudo rm -rf /tmp/* ~/Library/Caches/Homebrew 2>/dev/null || true
+          
+          echo "=== Disk space after cleanup ==="
+          df -h
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Select Xcode Version
+      - name: Select Latest Xcode Version
         run: |
-          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode_*.app" | sort -V | tail -n 1)
           if [ -n "$XCODE_PATH" ]; then
-            echo "Selecting $XCODE_PATH"
+            echo "Selecting latest Xcode: $XCODE_PATH"
             sudo xcode-select -s "$XCODE_PATH"
-          elif [ -d "/Applications/Xcode_15.4.app" ]; then
-            echo "Selecting /Applications/Xcode_15.4.app"
-            sudo xcode-select -s /Applications/Xcode_15.4.app
           fi
           xcodebuild -version
+
+      - name: Cache Bazel Disk Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.bazel_cache
+          key: bazel-cache-${{ runner.os }}-${{ hashFiles('build_configuration.json', 'patcher.py') }}-${{ github.run_id }}
+          restore-keys: |
+            bazel-cache-${{ runner.os }}-${{ hashFiles('build_configuration.json', 'patcher.py') }}-
+            bazel-cache-${{ runner.os }}-
+          save-always: true
+
+      - name: Configure Bazel Global Settings
+        run: |
+          mkdir -p ~/.bazel_cache
+          cat << 'EOF' > ~/.bazelrc
+build --disk_cache=/Users/runner/.bazel_cache
+build --local_ram_resources=HOST_RAM*0.8
+build --verbose_failures
+EOF
+          echo "Configured ~/.bazelrc:"
+          cat ~/.bazelrc
 
       - name: Clone Upstream Repository
         run: |
@@ -57,6 +103,8 @@ jobs:
       - name: Prepare Build Configuration
         run: |
           cp build_configuration.json telegram/build_configuration.json
+          echo "build --disk_cache=/Users/runner/.bazel_cache" >> telegram/.bazelrc
+          echo "build --local_ram_resources=HOST_RAM*0.8" >> telegram/.bazelrc
 
       - name: Build IPA with Bazel
         run: |
