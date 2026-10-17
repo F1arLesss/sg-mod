@@ -35,12 +35,10 @@ jobs:
           # Remove .NET and Mono runtimes
           sudo rm -rf /usr/share/dotnet /usr/local/share/dotnet /Library/Frameworks/Mono.framework 2>/dev/null || true
           
-          # Keep only latest Xcode, remove older versions to save 20+ GB
-          LATEST_XCODE=$(find /Applications -maxdepth 1 -name "Xcode_*.app" | sort -V | tail -n 1)
-          echo "Keeping latest Xcode: $LATEST_XCODE"
+          # Remove older Xcode versions, keeping all Xcode 16.x versions
           for xcode_app in /Applications/Xcode_*.app; do
-            if [ -d "$xcode_app" ] && [ "$xcode_app" != "$LATEST_XCODE" ]; then
-              echo "Removing older Xcode: $xcode_app"
+            if [ -d "$xcode_app" ] && [[ "$xcode_app" != *Xcode_16* ]]; then
+              echo "Removing non-Xcode 16: $xcode_app"
               sudo rm -rf "$xcode_app" 2>/dev/null || true
             fi
           done
@@ -57,12 +55,22 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Select Latest Xcode Version
+      - name: Select Xcode 16 Version
         run: |
-          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode_*.app" | sort -V | tail -n 1)
-          if [ -n "$XCODE_PATH" ]; then
-            echo "Selecting latest Xcode: $XCODE_PATH"
-            sudo xcode-select -s "$XCODE_PATH"
+          XCODE_DIR=""
+          for app in $(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V -r); do
+            if [ -d "$app/Contents/Developer" ]; then
+              XCODE_DIR="$app/Contents/Developer"
+              break
+            fi
+          done
+          
+          if [ -n "$XCODE_DIR" ]; then
+            echo "Selecting Xcode: $XCODE_DIR"
+            sudo xcode-select -s "$XCODE_DIR"
+          elif [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+            echo "Selecting default Xcode: /Applications/Xcode.app/Contents/Developer"
+            sudo xcode-select -s "/Applications/Xcode.app/Contents/Developer"
           fi
           xcodebuild -version
 
