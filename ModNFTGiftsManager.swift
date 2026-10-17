@@ -100,6 +100,10 @@ public final class ModNFTGiftsManager {
         UserDefaults.standard.removeObject(forKey: self.storageKey)
     }
     
+    public func getCustomGifts(accountPeerId: EnginePeer.Id = EnginePeer.Id(0)) -> [ProfileGiftsContext.State.StarGift] {
+        return self.injectCustomGifts(into: [], accountPeerId: accountPeerId)
+    }
+    
     public func injectCustomGifts(
         into existing: [ProfileGiftsContext.State.StarGift],
         accountPeerId: EnginePeer.Id
