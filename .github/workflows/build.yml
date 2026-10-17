@@ -1,6 +1,8 @@
 name: Build Modded Telegram-iOS IPA
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       upstream_repo:
@@ -34,8 +36,10 @@ jobs:
 
       - name: Clone Upstream Repository
         run: |
-          echo "Cloning ${{ github.event.inputs.upstream_repo }} (branch: ${{ github.event.inputs.upstream_branch }})..."
-          git clone --branch ${{ github.event.inputs.upstream_branch }} --depth 1 ${{ github.event.inputs.upstream_repo }} telegram
+          UPSTREAM_REPO="${{ github.event.inputs.upstream_repo || 'https://github.com/TelegramMessenger/Telegram-iOS.git' }}"
+          UPSTREAM_BRANCH="${{ github.event.inputs.upstream_branch || 'master' }}"
+          echo "Cloning $UPSTREAM_REPO (branch: $UPSTREAM_BRANCH)..."
+          git clone --branch "$UPSTREAM_BRANCH" --depth 1 "$UPSTREAM_REPO" telegram
           cd telegram
           git submodule update --init --recursive --depth 1 -j8
 
