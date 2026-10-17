@@ -43,14 +43,20 @@ public final class ModMenuHandler: NSObject, UIGestureRecognizerDelegate {
         let hideOnline = UserDefaults.standard.bool(forKey: "mod_ghost_hide_online")
         let readMessages = UserDefaults.standard.bool(forKey: "mod_ghost_read_messages")
         let hideTyping = UserDefaults.standard.bool(forKey: "mod_ghost_hide_typing")
+        let hideVoiceConsumed = UserDefaults.standard.bool(forKey: "mod_ghost_hide_voice_consumed")
         let delaySeconds = UserDefaults.standard.integer(forKey: "mod_delay_send_seconds")
+        
         let antiDelete = UserDefaults.standard.bool(forKey: "mod_anti_delete")
+        let antiEdit = UserDefaults.standard.bool(forKey: "mod_anti_edit")
+        let bypassCopyProtection = UserDefaults.standard.bool(forKey: "mod_bypass_copy_protection")
+        let bypassRestrictions = UserDefaults.standard.bool(forKey: "mod_bypass_restrictions")
+        
         let localPremium = UserDefaults.standard.bool(forKey: "mod_local_premium")
         let giftsCount = ModNFTGiftsManager.shared.customGiftsCount
         
         let alert = UIAlertController(
             title: "⚡ Swiftgram Mod Menu",
-            message: "Настройки модификаций клиента",
+            message: "Секретные настройки модификаций клиента",
             preferredStyle: .actionSheet
         )
         
@@ -78,7 +84,15 @@ public final class ModMenuHandler: NSObject, UIGestureRecognizerDelegate {
             self?.showModMenu(from: presenter)
         }))
         
-        // 2.4 Delayed Send
+        // 2.4 Unseen Listen for Voice & Circles (Ghost)
+        let voiceTitle = "🎙️ [Призрак] Не отмечать ГС/кружки: " + (hideVoiceConsumed ? "🟢 ВКЛ" : "⚪ ВЫКЛ")
+        alert.addAction(UIAlertAction(title: voiceTitle, style: .default, handler: { [weak self] _ in
+            UserDefaults.standard.set(!hideVoiceConsumed, forKey: "mod_ghost_hide_voice_consumed")
+            self?.feedback()
+            self?.showModMenu(from: presenter)
+        }))
+        
+        // 2.5 Delayed Send
         let delayTitle = "⏱️ [Призрак] Задержка отправки: " + (delaySeconds > 0 ? "\(delaySeconds) сек." : "ВЫКЛ")
         alert.addAction(UIAlertAction(title: delayTitle, style: .default, handler: { [weak self] _ in
             self?.promptDelayTimer(from: presenter)
@@ -92,7 +106,31 @@ public final class ModMenuHandler: NSObject, UIGestureRecognizerDelegate {
             self?.showModMenu(from: presenter)
         }))
         
-        // 4. Local Telegram Premium
+        // 4. Anti-Edit (Edit History)
+        let antiEditTitle = "📝 История изменений (Анти-редактирование): " + (antiEdit ? "🟢 ВКЛ" : "⚪ ВЫКЛ")
+        alert.addAction(UIAlertAction(title: antiEditTitle, style: .default, handler: { [weak self] _ in
+            UserDefaults.standard.set(!antiEdit, forKey: "mod_anti_edit")
+            self?.feedback()
+            self?.showModMenu(from: presenter)
+        }))
+        
+        // 5. Bypass Copy Protection & View-Once Save
+        let copyTitle = "🔓 Обход защиты и сохранение медиа: " + (bypassCopyProtection ? "🟢 ВКЛ" : "⚪ ВЫКЛ")
+        alert.addAction(UIAlertAction(title: copyTitle, style: .default, handler: { [weak self] _ in
+            UserDefaults.standard.set(!bypassCopyProtection, forKey: "mod_bypass_copy_protection")
+            self?.feedback()
+            self?.showModMenu(from: presenter)
+        }))
+        
+        // 6. Bypass App Store Censorship & Channel Bans
+        let restrictionsTitle = "🚫 Обход блокировок App Store: " + (bypassRestrictions ? "🟢 ВКЛ" : "⚪ ВЫКЛ")
+        alert.addAction(UIAlertAction(title: restrictionsTitle, style: .default, handler: { [weak self] _ in
+            UserDefaults.standard.set(!bypassRestrictions, forKey: "mod_bypass_restrictions")
+            self?.feedback()
+            self?.showModMenu(from: presenter)
+        }))
+        
+        // 7. Local Telegram Premium
         let premiumTitle = "⭐ Локальный Telegram Premium: " + (localPremium ? "🟢 ВКЛ" : "⚪ ВЫКЛ")
         alert.addAction(UIAlertAction(title: premiumTitle, style: .default, handler: { [weak self] _ in
             UserDefaults.standard.set(!localPremium, forKey: "mod_local_premium")
@@ -100,7 +138,7 @@ public final class ModMenuHandler: NSObject, UIGestureRecognizerDelegate {
             self?.showModMenu(from: presenter)
         }))
         
-        // 5. NFT Star Gifts Builder
+        // 8. NFT Star Gifts Builder
         let giftsTitle = "🎁 Конструктор NFT-подарков (в профиле: \(giftsCount))"
         alert.addAction(UIAlertAction(title: giftsTitle, style: .default, handler: { [weak self] _ in
             self?.showNFTGiftsBuilder(from: presenter)
