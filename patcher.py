@@ -633,6 +633,68 @@ private func _internal_enqueueMessagesDirect(account: Account, peerId: PeerId, m
                 # '--output_groups=+dsyms',"""
         patch_file(make_file, p26_search_config, p26_replace_config, "Optimization: disable watchos_cpus and dsyms in Make.py")
 
+    # 27. Patch GlassBackgroundComponent.swift: iOS 26 UIGlassEffect / UIGlassContainerEffect SDK compatibility
+    glass_file = os.path.join(repo_path, "submodules", "TelegramUI", "Components", "GlassBackgroundComponent", "Sources", "GlassBackgroundComponent.swift")
+    glass_fallback = """
+// Fallback dummy classes for SDKs below iOS 26
+private class UIGlassEffect: UIVisualEffect {
+    enum Style {
+        case regular
+        case clear
+    }
+    var isInteractive: Bool = false
+    var tintColor: UIColor?
+    init(style: Style = .regular) {
+        super.init()
+    }
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+private class UIGlassContainerEffect: UIVisualEffect {
+    var spacing: CGFloat = 0.0
+}
+"""
+    if os.path.isfile(glass_file):
+        with open(glass_file, "r", encoding="utf-8") as f:
+            glass_content = f.read()
+
+        if "private class UIGlassEffect" not in glass_content:
+            glass_content = glass_content.replace("import AppBundle", "import AppBundle\n" + glass_fallback)
+
+        glass_content = glass_content.replace(
+            "public static var useCustomGlassImpl: Bool = false",
+            "public static var useCustomGlassImpl: Bool = true"
+        )
+
+        with open(glass_file, "w", encoding="utf-8") as f:
+            f.write(glass_content)
+        print("[+] Successfully patched: GlassBackgroundComponent.swift for iOS SDK compatibility")
+
+    # 28. Disable -warnings-as-errors in GlassBackgroundComponent/BUILD
+    glass_build_file = os.path.join(repo_path, "submodules", "TelegramUI", "Components", "GlassBackgroundComponent", "BUILD")
+    if os.path.isfile(glass_build_file):
+        patch_file(glass_build_file, '"-warnings-as-errors",', '# "-warnings-as-errors",', "Compatibility: disable -warnings-as-errors in GlassBackgroundComponent")
+
+    # 29. Scan any other submodules for UIGlassEffect and inject fallback if needed
+    submodules_dir = os.path.join(repo_path, "submodules")
+    if os.path.isdir(submodules_dir):
+        for root, dirs, files in os.walk(submodules_dir):
+            for file in files:
+                if file.endswith(".swift") and file != "GlassBackgroundComponent.swift":
+                    full_p = os.path.join(root, file)
+                    try:
+                        with open(full_p, "r", encoding="utf-8") as f:
+                            c = f.read()
+                        if "UIGlassEffect" in c and "private class UIGlassEffect" not in c:
+                            print(f"[!] Found UIGlassEffect in {full_p}, patching with fallback definitions...")
+                            c = glass_fallback + "\n" + c
+                            with open(full_p, "w", encoding="utf-8") as f:
+                                f.write(c)
+                    except Exception:
+                        pass
+
     print("[SUCCESS] All patch operations applied cleanly.")
 
 

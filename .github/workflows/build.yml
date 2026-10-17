@@ -35,11 +35,19 @@ jobs:
           # Remove .NET and Mono runtimes
           sudo rm -rf /usr/share/dotnet /usr/local/share/dotnet /Library/Frameworks/Mono.framework 2>/dev/null || true
           
-          # Remove older Xcode versions, keeping all Xcode 16.x versions
+          # List all installed Xcode versions
+          echo "=== Installed Xcode versions ==="
+          ls -ld /Applications/Xcode*.app 2>/dev/null || true
+          
+          # Remove older Xcode versions (< 16), keep Xcode 16 and all newer versions
           for xcode_app in /Applications/Xcode_*.app; do
-            if [ -d "$xcode_app" ] && [[ "$xcode_app" != *Xcode_16* ]]; then
-              echo "Removing non-Xcode 16: $xcode_app"
-              sudo rm -rf "$xcode_app" 2>/dev/null || true
+            if [ -d "$xcode_app" ]; then
+              if [[ "$xcode_app" =~ Xcode_(1[6-9]|[2-9][0-9]) ]]; then
+                echo "Preserving Xcode: $xcode_app"
+              else
+                echo "Removing older Xcode: $xcode_app"
+                sudo rm -rf "$xcode_app" 2>/dev/null || true
+              fi
             fi
           done
           
@@ -55,24 +63,38 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Select Xcode 16 Version
+      - name: Select Newest Xcode Version
         run: |
+          echo "Scanning for available Xcode versions in /Applications..."
+          ls -ld /Applications/Xcode*.app 2>/dev/null || true
+          
           XCODE_DIR=""
-          for app in $(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V -r); do
+          for app in $(find /Applications -maxdepth 1 -name "Xcode*.app" | sort -V -r); do
+            echo "Checking candidate: $app"
             if [ -d "$app/Contents/Developer" ]; then
               XCODE_DIR="$app/Contents/Developer"
+              echo "Selected newest valid Xcode: $XCODE_DIR"
               break
+            else
+              echo "Skipping candidate $app (Contents/Developer not found)"
             fi
           done
           
           if [ -n "$XCODE_DIR" ]; then
-            echo "Selecting Xcode: $XCODE_DIR"
+            echo "Switching active Xcode to $XCODE_DIR"
             sudo xcode-select -s "$XCODE_DIR"
           elif [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
-            echo "Selecting default Xcode: /Applications/Xcode.app/Contents/Developer"
+            echo "Switching active Xcode to /Applications/Xcode.app/Contents/Developer"
             sudo xcode-select -s "/Applications/Xcode.app/Contents/Developer"
           fi
+          
+          echo "=== Active Xcode Developer Directory ==="
+          xcode-select -p
           xcodebuild -version
+          
+          XCODE_VER=$(xcodebuild -version | head -n1 | awk '{print $2}')
+          echo "ACTIVE_XCODE_VERSION=$XCODE_VER" >> $GITHUB_ENV
+          echo "Active Xcode Version: $XCODE_VER"
 
       - name: Restore Bazel Disk Cache
         uses: actions/cache/restore@v4
@@ -108,6 +130,10 @@ jobs:
         run: |
           cp build_configuration.json telegram/build_configuration.json
           echo "build --disk_cache=/Users/runner/.bazel_cache" >> telegram/.bazelrc
+          if [ -n "$ACTIVE_XCODE_VERSION" ]; then
+            echo "Updating telegram/versions.json with active Xcode version: $ACTIVE_XCODE_VERSION..."
+            python3 -c "import json; v = json.load(open('telegram/versions.json')); v['xcode'] = '$ACTIVE_XCODE_VERSION'; v['deploy_xcode'] = '$ACTIVE_XCODE_VERSION'; json.dump(v, open('telegram/versions.json', 'w'), indent=2); print('Updated versions.json to Xcode', '$ACTIVE_XCODE_VERSION')"
+          fi
 
       - name: Build IPA with Bazel
         run: |
