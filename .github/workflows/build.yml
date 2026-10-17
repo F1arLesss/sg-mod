@@ -87,7 +87,6 @@ jobs:
         run: |
           mkdir -p ~/.bazel_cache
           echo "build --disk_cache=/Users/runner/.bazel_cache" > ~/.bazelrc
-          echo "build --local_ram_resources=HOST_RAM*0.8" >> ~/.bazelrc
           echo "build --verbose_failures" >> ~/.bazelrc
           echo "Configured ~/.bazelrc:"
           cat ~/.bazelrc
@@ -109,7 +108,6 @@ jobs:
         run: |
           cp build_configuration.json telegram/build_configuration.json
           echo "build --disk_cache=/Users/runner/.bazel_cache" >> telegram/.bazelrc
-          echo "build --local_ram_resources=HOST_RAM*0.8" >> telegram/.bazelrc
 
       - name: Build IPA with Bazel
         run: |
